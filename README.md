@@ -2,7 +2,7 @@
 
 ```
 yarn install
-yarn start
+yarn start:ssr
 ```
 
 # Start from scratch
@@ -318,6 +318,198 @@ Run:
 yarn install
 yarn start
 ```
+
+# SSR
+
+This demo uses `@babel/register` to transpile and build server side code.
+Probably to have more control (and for production build) we must eject CRA and use webpack config file.
+
+```bash
+yarn add express
+
+yarn add -D @babel/preset-env @babel/preset-react @babel/register @babel/preset-typescript ignore-styles babel-plugin-transform-assets
+```
+
+Create a `src/server/index.js` file
+
+```js
+//src/server/index.js
+require("ignore-styles");
+
+require("@babel/register")({
+  ignore: [/(node_modules)/],
+  presets: [
+    "@babel/preset-env",
+    [
+      "@babel/preset-react",
+      {
+        //uses the new jsx transform that came with React 17
+        runtime: "automatic",
+      },
+    ],
+    "@babel/preset-typescript",
+  ],
+  plugins: [
+    [
+      //CRA handle images through 'url-loader' plugin.
+      //'url-loader' encodes images smaller than 10K as base64
+      //otherwise uses[name].[md4: hash: hex: 8].[ext]
+      "transform-assets",
+      {
+        extensions: ["bmp", "gif", "jpeg", "jpg", "png"],
+        limit: 10000,
+        //CRA uses url-loader that by default uses [md4, hex] hash...
+        name: "static/media/[name].[md4:hash:hex:8].[ext]",
+      },
+    ],
+    //CRA handle svg through 'file-loader' plugin
+    //It always format as [name].[md4: hash: hex: 8].[ext]
+    //use 'transform-assets' a second time for svg as 10K limit size is non needed
+    [
+      "transform-assets",
+      {
+        extensions: ["svg"],
+        name: "static/media/[name].[md4:hash:hex:8].[ext]",
+      },
+      "transform-assets-svg",
+    ],
+  ],
+  extensions: [".tsx", ".ts", ".es6", ".es", ".jsx", ".js", ".mjs"],
+});
+
+require("./server");
+```
+
+Create a `src/server/server.js` file
+
+```jsx
+//src/server/server.js
+import express from "express";
+import fs from "fs";
+import path from "path";
+import React from "react";
+import { renderToString } from "react-dom/server";
+import { StaticRouter } from "react-router-dom";
+import { ServerStyleSheet, StyleSheetManager } from "styled-components";
+import App from "../App";
+import GlobalStyle from "../globalStyle";
+
+const PORT = 8000;
+
+const app = express();
+
+//first check if the url match build folder entries (except index.html)
+app.use(
+  express.static(path.resolve(__dirname, "../..", "build"), {
+    index: false,
+  })
+);
+
+app.get("*", (req, res, next) => {
+  const { path: location } = req;
+  const context = {};
+  fs.readFile(path.resolve("./build/index.html"), "utf-8", (err, data) => {
+    if (err) {
+      console.log(`ERROR: `, err);
+      return res.status(500).send("Some error happens");
+    }
+
+    const sheet = new ServerStyleSheet();
+    let html = "";
+    let styleTags = "";
+    try {
+      html = renderToString(
+        <StyleSheetManager sheet={sheet.instance}>
+          <>
+            <GlobalStyle />
+            <StaticRouter location={location} context={context}>
+              <App />
+            </StaticRouter>
+          </>
+        </StyleSheetManager>
+      );
+      styleTags = sheet.getStyleTags(); // or sheet.getStyleElement();
+    } catch (error) {
+      // handle error
+      console.error(error);
+    } finally {
+      sheet.seal();
+    }
+
+    return res
+      .status(context.statusCode === 404 ? 404 : 200)
+      .send(
+        data
+          .replace('<div id="root"></div>', `<div id="root">${html}</div>`)
+          .replace("</head><body>", `${styleTags}</head><body>`)
+      );
+  });
+});
+
+app.listen(PORT, () => {
+  console.log(`Server started on port ${PORT}`);
+});
+```
+
+Remove `<BrowserRouter>` from `App.tsx` and wrap `<App />` Component with
+`<BrowserRouter>` in `index.tsx`
+
+Remove `src/App.css` cause we use `styled-components`
+
+Update `src/pages/About.tsx` to display images example.
+
+Add `src/pages/NotFound.tsx`
+
+Create `src/static/images` folder and move `src/logo.svg` into this folder. Add also `logo512.png` and `logo1024.png` images.
+
+In `src/components/Logo.tsx` change the import statement of logo to:
+
+```jsx
+import logo from "../static/images/logo.svg";
+```
+
+Install `nodemon`
+
+```bash
+yarn add -D nodemon
+```
+
+Add `nodemon.json`
+
+```json
+//nodemon.json
+{
+  "ignore": "build",
+  "ext": "ts,tsx,js,jsx,mjs,json",
+  "exec": "yarn build && yarn ssr"
+}
+```
+
+Add `ssr` and `start:ssr` script to `package.json`
+
+```json
+{
+    "scripts": {
+        ...
+      "ssr": "node ./src/server/index.js",
+      "start:ssr": "nodemon"
+    }
+}
+```
+
+Before use `nodemon` make a first build to create `build` folder (this avoid `nodemon` to continue rebuild the project if the `build` folder is not found).
+
+```bash
+yarn build
+```
+
+Use `nodemon` because it watch for any file chabges and rebuild the server. This is not the optimal solution cause on every change we rebuild all. Using webpack watch is faster because when files change it doesn't rebuild all the project.
+
+```bash
+yarn start:ssr
+```
+
+Open [localhost:8000/](http://localhost:8000/) in browser then enjoy!
 
 # Fork
 
