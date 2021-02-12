@@ -2,6 +2,10 @@
 
 ```
 yarn install
+
+#only the first time, just to create buld folder
+yarn build
+
 yarn start:ssr
 ```
 
