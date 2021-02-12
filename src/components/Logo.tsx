@@ -1,5 +1,5 @@
 import styled from "styled-components";
-import logo from "../logo.svg";
+import logo from "../static/images/logo.svg";
 
 const AppContainer = styled.div`
   text-align: center;
