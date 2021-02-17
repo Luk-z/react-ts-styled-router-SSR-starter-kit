@@ -501,13 +501,7 @@ Add `ssr` and `start:ssr` script to `package.json`
 }
 ```
 
-Before use `nodemon` make a first build to create `build` folder (this avoid `nodemon` to continue rebuild the project if the `build` folder is not found).
-
-```bash
-yarn build
-```
-
-Use `nodemon` because it watch for any file chabges and rebuild the server. This is not the optimal solution cause on every change we rebuild all. Using webpack watch is faster because when files change it doesn't rebuild all the project.
+Use `nodemon` because it watch for any file changes and rebuild the server. This is not the optimal solution cause on every change we rebuild all. Using webpack `watch` is a better solution because when files change it doesn't rebuild all the project.
 
 ```bash
 yarn start:ssr
